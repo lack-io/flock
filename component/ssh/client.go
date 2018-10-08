@@ -25,13 +25,19 @@ type Client struct {
 	// ssh 认证方式，支持密码认证和密钥认证
 	// 密码为空时改为密钥认证
 	// 两种同时设置时为密码认证，但其中密码出错时会时认证速度减慢
-	Auth []ssh.AuthMethod
+	auth []ssh.AuthMethod
 
 	// 封装了ssh的client
 	cli *ssh.Client
 
 	// 超时时间
 	Timeout time.Duration
+
+	// 错误信息
+	stderr error
+
+	// 输出信息
+	stdout []byte
 }
 
 // 新建 ssh client
@@ -40,16 +46,18 @@ func NewClient(host, user string, port int, timeout time.Duration) *Client {
 		Host:    host,
 		User:    user,
 		Port:    port,
-		Auth:    []ssh.AuthMethod{},
+		auth:    []ssh.AuthMethod{},
 		cli:     nil,
 		Timeout: timeout,
+		stderr:  nil,
+		stdout:  nil,
 	}
 }
 
 // 添加密码认证
 // @passwd : ssh 登录密码
 func (c *Client) AddPassword(passwd string) error {
-	c.Auth = append(c.Auth, ssh.Password(passwd))
+	c.auth = append(c.auth, ssh.Password(passwd))
 	return nil
 }
 
@@ -59,35 +67,41 @@ func (c *Client) AddPassword(passwd string) error {
 func (c *Client) AddPrivateKey(key, passParse string) error {
 	privateKey, err := ioutil.ReadFile(key)
 	if err != nil {
+		c.stderr = err
 		return err
 	}
 	var signer ssh.Signer
 	if passParse == "" {
 		signer, err = ssh.ParsePrivateKey(privateKey)
 		if err != nil {
+			c.stderr = err
 			return err
 		}
 	} else {
 		signer, err = ssh.ParsePrivateKeyWithPassphrase(privateKey, []byte(passParse))
 		if err != nil {
+			c.stderr = err
 			return err
 		}
 	}
-	c.Auth = append(c.Auth, ssh.PublicKeys(signer))
+	c.auth = append(c.auth, ssh.PublicKeys(signer))
 	return nil
 }
 
 // 连接client
+// ssh 的连接首先加载配置信息，包含ip地址，用户名等
+// 然后加载验证方式，包含密码和密钥
 func (c *Client) Conn() error {
 	config := &ssh.ClientConfig{
 		User:            c.User,
-		Auth:            c.Auth,
+		Auth:            c.auth,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         c.Timeout,
 	}
 	msg := c.Host + ":" + strconv.Itoa(c.Port)
 	client, err := ssh.Dial("tcp", msg, config)
 	if err != nil {
+		c.stderr = err
 		return err
 	}
 	c.cli = client
@@ -102,11 +116,13 @@ func (c *Client) Close() {
 // 远程执行命令
 func (c *Client) Exec(cmd string) ([]byte, error) {
 	if c.cli == nil {
+		c.stderr = errors.New("no point to ssh client")
 		return nil, errors.New("no point to ssh client")
 	}
 
 	session, err := c.cli.NewSession()
 	if err != nil {
+		c.stderr = err
 		return nil, err
 	}
 
@@ -124,37 +140,47 @@ func (c *Client) Exec(cmd string) ([]byte, error) {
 	err = session.Run(cmd)
 
 	if err != nil {
-		return nil, errors.New(stderr.String())
+		c.stderr = errors.New(stderr.String())
+		return nil, c.stderr
 	}
-	return stdout.Bytes(), nil
+	c.stdout = stdout.Bytes()
+	return c.stdout, nil
 }
 
 // ssh 文件传输
-func (c *Client) Transfer(src, dest string, buffer int) error {
+// @src: 本地文件路径
+// @dest: 远程文件路径
+// @buffer: 打开缓存文件的大小
+func (c *Client) Transfer(src, dest string, buffer int) ([]byte, error) {
 	if c.cli == nil {
-		return errors.New("no point to ssh client")
+		c.stderr = errors.New("no point to ssh client")
+		return nil, c.stderr
 	}
 	sftpClient, _ := sftp.NewClient(c.cli)
 
 	srcFile, err := os.Open(src)
 	if err != nil {
-		return err
+		c.stderr = err
+		return nil, err
 	}
 	defer srcFile.Close()
 
 	dstFile, _ := sftpClient.Create(dest)
+
 	defer dstFile.Close()
 
 	buf := make([]byte, buffer)
 	for {
 		block, err := srcFile.Read(buf)
 		if err != nil {
-			return err
+			c.stderr = err
+			return nil, c.stderr
 		}
 		if block == 0 {
 			break
 		}
 		dstFile.Write(buf)
 	}
-	return nil
+	c.stdout = []byte("Transfer Successful!")
+	return c.stdout, nil
 }

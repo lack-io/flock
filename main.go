@@ -5,29 +5,28 @@ import (
 	"fmt"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
-	"io/ioutil"
 	"log"
 	"os"
 )
 
 func main() {
-	file, err := ioutil.ReadFile("/Users/xingyys/.ssh/id_rsa")
-	if err != nil {
-		log.Fatal("Failed to read file: " + err.Error())
-	}
-	signer, err := ssh.ParsePrivateKeyWithPassphrase(file, []byte("123456"))
-	if err != nil {
-		log.Fatal("Failed to parse private key: " + err.Error())
-	}
+	//file, err := ioutil.ReadFile("/Users/xingyys/.ssh/id_rsa")
+	//if err != nil {
+	//	log.Fatal("Failed to read file: " + err.Error())
+	//}
+	//signer, err := ssh.ParsePrivateKeyWithPassphrase(file, []byte("123456"))
+	//if err != nil {
+	//	log.Fatal("Failed to parse private key: " + err.Error())
+	//}
 	config := &ssh.ClientConfig{
 		User: "root",
 		Auth: []ssh.AuthMethod{
-			//ssh.Password("123456"),
-			ssh.PublicKeys(signer),
+			ssh.Password("123456"),
+			//ssh.PublicKeys(signer),
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
-	client, err := ssh.Dial("tcp", "192.168.3.111:22", config)
+	client, err := ssh.Dial("tcp", "192.168.3.161:22", config)
 	if err != nil {
 		log.Fatal("Failed to dial: ", err)
 	}
@@ -45,7 +44,7 @@ func main() {
 	session.Stderr = &be
 	session.Stdout = &b
 
-	if err := session.Run("w1"); err != nil {
+	if err := session.Run("w"); err != nil {
 		fmt.Println(be.String())
 		fmt.Println("execute command failed: ", err.Error())
 	} else {

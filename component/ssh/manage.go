@@ -37,16 +37,9 @@ func (m *Manage) RmClient(host string) (*Client, error) {
 	return nil, errors.New("not found connection")
 }
 
-func (m *Manage) Start() error {
+func (m *Manage) Run() error {
 	for _, client := range m.cli {
 		client.Conn()
-	}
-	return nil
-}
-
-func (m *Manage) Exec(cmd string) error {
-	for _, client := range m.cli {
-		client.Exec(cmd)
 	}
 	return nil
 }
