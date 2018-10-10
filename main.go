@@ -26,7 +26,7 @@ func main() {
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
-	client, err := ssh.Dial("tcp", "192.168.3.161:22", config)
+	client, err := ssh.Dial("tcp", "192.168.3.111:22", config)
 	if err != nil {
 		log.Fatal("Failed to dial: ", err)
 	}
@@ -44,7 +44,7 @@ func main() {
 	session.Stderr = &be
 	session.Stdout = &b
 
-	if err := session.Run("w"); err != nil {
+	if err := session.Run("w1"); err != nil {
 		fmt.Println(be.String())
 		fmt.Println("execute command failed: ", err.Error())
 	} else {

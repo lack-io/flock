@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
+	"io"
 	"io/ioutil"
 	"os"
 	"strconv"
@@ -116,8 +117,8 @@ func (c *Client) Close() {
 // 远程执行命令
 func (c *Client) Exec(cmd string) ([]byte, error) {
 	if c.cli == nil {
-		c.stderr = errors.New("no point to ssh client")
-		return nil, errors.New("no point to ssh client")
+		c.stderr = errors.New("no such this client")
+		return nil, c.stderr
 	}
 
 	session, err := c.cli.NewSession()
@@ -138,7 +139,6 @@ func (c *Client) Exec(cmd string) ([]byte, error) {
 	// ssh 的错误会存储到 session.Stderr
 	// err 为远程命令的错误码
 	err = session.Run(cmd)
-
 	if err != nil {
 		c.stderr = errors.New(stderr.String())
 		return nil, c.stderr
@@ -153,7 +153,7 @@ func (c *Client) Exec(cmd string) ([]byte, error) {
 // @buffer: 打开缓存文件的大小
 func (c *Client) Transfer(src, dest string, buffer int) ([]byte, error) {
 	if c.cli == nil {
-		c.stderr = errors.New("no point to ssh client")
+		c.stderr = errors.New("no such this client")
 		return nil, c.stderr
 	}
 	sftpClient, _ := sftp.NewClient(c.cli)
@@ -163,6 +163,7 @@ func (c *Client) Transfer(src, dest string, buffer int) ([]byte, error) {
 		c.stderr = err
 		return nil, err
 	}
+
 	defer srcFile.Close()
 
 	dstFile, _ := sftpClient.Create(dest)
@@ -172,11 +173,11 @@ func (c *Client) Transfer(src, dest string, buffer int) ([]byte, error) {
 	buf := make([]byte, buffer)
 	for {
 		block, err := srcFile.Read(buf)
-		if err != nil {
+		if err != nil && err != io.EOF {
 			c.stderr = err
 			return nil, c.stderr
 		}
-		if block == 0 {
+		if block == 0 || err == io.EOF {
 			break
 		}
 		dstFile.Write(buf)

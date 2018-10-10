@@ -32,20 +32,20 @@ func init() {
 }
 
 type node struct {
-	host       string
-	port       int
-	user       string
-	passwd     string
-	privatekey string
-	passparse  string
+	Host       string
+	Port       int
+	User       string
+	Passwd     string
+	Privatekey string
+	Passparse  string
 }
 
 type section struct {
-	name  string
-	nodes map[string]*node
+	Name  string
+	Nodes map[string]*node
 }
 
-type ConfigFile struct {
+type configFile struct {
 	lock     sync.RWMutex
 	filename string
 
@@ -54,8 +54,8 @@ type ConfigFile struct {
 	BlockMode bool
 }
 
-func NewConfigFile() *ConfigFile {
-	c := &ConfigFile{}
+func NewConfigFile() *configFile {
+	c := &configFile{}
 	c.filename = DefaultConfigFile
 	c.sections = make(map[string]*section)
 	c.BlockMode = true
@@ -63,7 +63,7 @@ func NewConfigFile() *ConfigFile {
 }
 
 // 加载配置
-func (c *ConfigFile) read(reader io.Reader) (err error) {
+func (c *configFile) read(reader io.Reader) (err error) {
 	buf := bufio.NewReader(reader)
 
 	mask, err := buf.Peek(3)
@@ -101,34 +101,34 @@ func (c *ConfigFile) read(reader io.Reader) (err error) {
 			continue
 		default: // 默认解析为主机
 			_node := &node{
-				host:       "",
-				port:       22,
-				user:       DefaultUser,
-				passwd:     DefaultPasswd,
-				privatekey: DefaultPrivateKey,
-				passparse:  DefaultPassParse}
+				Host:       "",
+				Port:       22,
+				User:       DefaultUser,
+				Passwd:     DefaultPasswd,
+				Privatekey: DefaultPrivateKey,
+				Passparse:  DefaultPassParse}
 			s := strings.Split(line, ",")
 			for _, v := range s {
 				item := strings.Split(strings.TrimSpace(v), "=")
 				if len(item) == 1 {
 					// 解析行 192.168.100.1
-					_node.host = item[0]
+					_node.Host = item[0]
 				} else {
 					// 解析行
 					// host=192.168.100.1, port=22, user=root, passwd=123456, privatekey=.id_rsa
 					switch {
 					case item[0] == "host":
-						_node.host = item[1]
+						_node.Host = item[1]
 					case item[0] == "port":
-						_node.port, _ = strconv.Atoi(item[1])
+						_node.Port, _ = strconv.Atoi(item[1])
 					case item[0] == "user" || item[0] == "username":
-						_node.user = item[1]
+						_node.User = item[1]
 					case item[0] == "passwd" || item[0] == "password":
-						_node.passwd = item[1]
+						_node.Passwd = item[1]
 					case item[0] == "privatekey":
-						_node.privatekey = item[1]
+						_node.Privatekey = item[1]
 					case item[0] == "passparse":
-						_node.passparse = item[1]
+						_node.Passparse = item[1]
 					}
 				}
 			}
@@ -142,12 +142,12 @@ func (c *ConfigFile) read(reader io.Reader) (err error) {
 }
 
 // 加载默认配置文件
-func (c *ConfigFile) LoadDefaultFile() error {
+func (c *configFile) LoadDefaultFile() error {
 	return c.LoadFile(DefaultConfigFile)
 }
 
 // 加载配置文件
-func (c *ConfigFile) LoadFile(file string) error {
+func (c *configFile) LoadFile(file string) error {
 	f, err := os.Open(file)
 	if err != nil {
 		return err
@@ -157,14 +157,14 @@ func (c *ConfigFile) LoadFile(file string) error {
 }
 
 // 重新加载配置文件
-func (c *ConfigFile) Reload() (err error) {
+func (c *configFile) Reload() (err error) {
 	c.sections = make(map[string]*section)
 	err = c.LoadFile(c.filename)
 	return err
 }
 
 // 获取所有分组
-func (c *ConfigFile) GetGroupList() []string {
+func (c *configFile) GetGroupList() []string {
 	list := make([]string, 0)
 	for k, _ := range c.sections {
 		list = append(list, k)
@@ -173,7 +173,7 @@ func (c *ConfigFile) GetGroupList() []string {
 }
 
 // 获取指定分组
-func (c *ConfigFile) GetGroup(group string) *section {
+func (c *configFile) GetGroup(group string) *section {
 	// 没有分组的主机默认为 [default] 组
 	if len(group) == 0 {
 		group = DEFAULT_GROUP
@@ -192,22 +192,22 @@ func (c *ConfigFile) GetGroup(group string) *section {
 }
 
 // 添加分组
-func (c *ConfigFile) AddGroup(group string) error {
+func (c *configFile) AddGroup(group string) error {
 	if c.BlockMode {
 		c.lock.Lock()
 		defer c.lock.Unlock()
 	}
 	if _, ok := c.sections[group]; ok {
-		return errors.New("exists this group")
+		return errors.New("add an existed group")
 	}
 	c.sections[group] = &section{group, map[string]*node{}}
 	return nil
 }
 
 // 删除分组
-func (c *ConfigFile) DeleteGroup(group string) error {
+func (c *configFile) DeleteGroup(group string) error {
 	if len(group) == 0 {
-		return errors.New("point a empty group")
+		return errors.New("point an empty group")
 	}
 
 	if c.BlockMode {
@@ -216,14 +216,14 @@ func (c *ConfigFile) DeleteGroup(group string) error {
 	}
 
 	if _, ok := c.sections[group]; !ok {
-		return errors.New("not exists this group")
+		return errors.New("no such this group")
 	}
 	delete(c.sections, group)
 	return nil
 }
 
 // 添加分组中的主机
-func (c *ConfigFile) AddHost(group string, hostMap *node) error {
+func (c *configFile) AddHost(group string, hostMap *node) error {
 	if len(group) == 0 {
 		group = DEFAULT_GROUP
 	}
@@ -238,18 +238,18 @@ func (c *ConfigFile) AddHost(group string, hostMap *node) error {
 	}
 
 	if _, ok := c.sections[group]; !ok {
-		return errors.New("not exists this group")
+		return errors.New("no such this group")
 	}
 
-	if _, ok := c.sections[group].nodes[hostMap.host]; ok {
-		return errors.New("not exists this host")
+	if _, ok := c.sections[group].Nodes[hostMap.Host]; ok {
+		return errors.New("no such this host")
 	}
-	c.sections[group].nodes[hostMap.host] = hostMap
+	c.sections[group].Nodes[hostMap.Host] = hostMap
 	return nil
 }
 
 // 删除分组中的主机
-func (c *ConfigFile) DeleteHost(group, host string) error {
+func (c *configFile) DeleteHost(group, host string) error {
 	if len(group) == 0 {
 		group = DEFAULT_GROUP
 	}
@@ -259,28 +259,28 @@ func (c *ConfigFile) DeleteHost(group, host string) error {
 		defer c.lock.Unlock()
 	}
 	if _, ok := c.sections[group]; !ok {
-		return errors.New("not exists this group")
+		return errors.New("no such this group")
 	}
 
-	if _, ok := c.sections[group].nodes[host]; ok {
-		return errors.New("not exists this host")
+	if _, ok := c.sections[group].Nodes[host]; ok {
+		return errors.New("not such this host")
 	}
-	delete(c.sections[group].nodes, host)
+	delete(c.sections[group].Nodes, host)
 	return nil
 }
 
 // 获取所有主机
-func (c *ConfigFile) GetHostList() []string {
+func (c *configFile) GetHostList() []string {
 	list := make([]string, 0)
 	for _, group := range c.sections {
-		for host, _ := range group.nodes {
+		for host, _ := range group.Nodes {
 			list = append(list, host)
 		}
 	}
 	return list
 }
 
-func (c *ConfigFile) GetHost(host string) *node {
+func (c *configFile) GetHost(host string) *node {
 	if len(host) == 0 {
 		return nil
 	}
@@ -291,8 +291,8 @@ func (c *ConfigFile) GetHost(host string) *node {
 	}
 
 	for _, group := range c.sections {
-		for _, node := range group.nodes {
-			if node.host == host {
+		for _, node := range group.Nodes {
+			if node.Host == host {
 				return node
 			}
 		}
