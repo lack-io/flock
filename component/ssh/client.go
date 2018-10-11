@@ -1,3 +1,20 @@
+// Copyright 2018 xingyys, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// flock ssh 组件下的ssh客户端，用来连接远程ssh服务器
+// 支持远程命令和文件传输
+
 package ssh
 
 import (
@@ -11,6 +28,41 @@ import (
 	"strconv"
 	"time"
 )
+
+const SSHDocument = `
+Example 1: 远程执行命令
+	client := ssh.NewClient("10.11.22.11", "root", 22, time.Second*3)
+	// err := client.AddPassword("123456")
+	err := client.AddPrivateKey("/root/.ssh/id_rsa", "")
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	err = client.Conn()
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	buf, err := client.Exec("w")
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	fmt.Println(string(buf))
+
+Example 2: 上传文件到远程服务器
+	client := ssh.NewClient("10.11.22.11", "root", 22, time.Second*3)
+	err := client.AddPassword("123456")
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	err = client.Conn()
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	buf, err := client.PutFile("/tmp/123", "/tmp/456", 1024)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	fmt.Println(string(buf))
+`
 
 // ssh 连接对象，包含IP、用户名、端口、认证方式、超时时间
 type Client struct {
@@ -117,7 +169,7 @@ func (c *Client) Close() {
 // 远程执行命令
 func (c *Client) Exec(cmd string) ([]byte, error) {
 	if c.cli == nil {
-		c.stderr = errors.New("no such this client")
+		c.stderr = errors.New("client is nil")
 		return nil, c.stderr
 	}
 
@@ -151,9 +203,9 @@ func (c *Client) Exec(cmd string) ([]byte, error) {
 // @src: 本地文件路径
 // @dest: 远程文件路径
 // @buffer: 打开缓存文件的大小
-func (c *Client) Transfer(src, dest string, buffer int) ([]byte, error) {
+func (c *Client) PutFile(src, dest string, buffer int) ([]byte, error) {
 	if c.cli == nil {
-		c.stderr = errors.New("no such this client")
+		c.stderr = errors.New("client is nil")
 		return nil, c.stderr
 	}
 	sftpClient, _ := sftp.NewClient(c.cli)

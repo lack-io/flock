@@ -1,3 +1,20 @@
+// Copyright 2018 xingyys, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// flock ssh 组件的hosts文件加载器，
+// 解析类似ansible中/etc/ansible/hosts类型的主机文件
+
 package ssh
 
 import (
@@ -16,7 +33,7 @@ const (
 )
 
 var (
-	DefaultConfigFile = "/etc/flock/ssh/hosts" // 默认hosts文件路径
+	DefaultHostFile   = "/etc/flock/ssh/hosts" // 默认hosts文件路径
 	LineBreak         = "\n"                   // 默认换行符
 	DefaultUser       = "root"                 // ssh默认登录用户
 	DefaultPort       = 22                     // ssh默认端口
@@ -45,7 +62,8 @@ type section struct {
 	Nodes map[string]*node
 }
 
-type configFile struct {
+// 配置文件的对象
+type hostFile struct {
 	lock     sync.RWMutex
 	filename string
 
@@ -54,16 +72,16 @@ type configFile struct {
 	BlockMode bool
 }
 
-func NewConfigFile() *configFile {
-	c := &configFile{}
-	c.filename = DefaultConfigFile
+func NewHostFile() *hostFile {
+	c := &hostFile{}
+	c.filename = DefaultHostFile
 	c.sections = make(map[string]*section)
 	c.BlockMode = true
 	return c
 }
 
 // 加载配置
-func (c *configFile) read(reader io.Reader) (err error) {
+func (c *hostFile) read(reader io.Reader) (err error) {
 	buf := bufio.NewReader(reader)
 
 	mask, err := buf.Peek(3)
@@ -142,12 +160,12 @@ func (c *configFile) read(reader io.Reader) (err error) {
 }
 
 // 加载默认配置文件
-func (c *configFile) LoadDefaultFile() error {
-	return c.LoadFile(DefaultConfigFile)
+func (c *hostFile) LoadDefaultFile() error {
+	return c.LoadFile(DefaultHostFile)
 }
 
 // 加载配置文件
-func (c *configFile) LoadFile(file string) error {
+func (c *hostFile) LoadFile(file string) error {
 	f, err := os.Open(file)
 	if err != nil {
 		return err
@@ -157,14 +175,14 @@ func (c *configFile) LoadFile(file string) error {
 }
 
 // 重新加载配置文件
-func (c *configFile) Reload() (err error) {
+func (c *hostFile) Reload() (err error) {
 	c.sections = make(map[string]*section)
 	err = c.LoadFile(c.filename)
 	return err
 }
 
 // 获取所有分组
-func (c *configFile) GetGroupList() []string {
+func (c *hostFile) GetGroupList() []string {
 	list := make([]string, 0)
 	for k, _ := range c.sections {
 		list = append(list, k)
@@ -173,7 +191,7 @@ func (c *configFile) GetGroupList() []string {
 }
 
 // 获取指定分组
-func (c *configFile) GetGroup(group string) *section {
+func (c *hostFile) GetGroup(group string) *section {
 	// 没有分组的主机默认为 [default] 组
 	if len(group) == 0 {
 		group = DEFAULT_GROUP
@@ -191,23 +209,29 @@ func (c *configFile) GetGroup(group string) *section {
 	return c.sections[group]
 }
 
+// 是否存在分组
+func (c *hostFile) ExistGroup(group string) bool {
+	_, ok := c.sections[group]
+	return ok
+}
+
 // 添加分组
-func (c *configFile) AddGroup(group string) error {
+func (c *hostFile) AddGroup(group string) error {
 	if c.BlockMode {
 		c.lock.Lock()
 		defer c.lock.Unlock()
 	}
 	if _, ok := c.sections[group]; ok {
-		return errors.New("add an existed group")
+		return errors.New("group exists")
 	}
 	c.sections[group] = &section{group, map[string]*node{}}
 	return nil
 }
 
 // 删除分组
-func (c *configFile) DeleteGroup(group string) error {
+func (c *hostFile) DeleteGroup(group string) error {
 	if len(group) == 0 {
-		return errors.New("point an empty group")
+		return errors.New("group is empty")
 	}
 
 	if c.BlockMode {
@@ -216,14 +240,14 @@ func (c *configFile) DeleteGroup(group string) error {
 	}
 
 	if _, ok := c.sections[group]; !ok {
-		return errors.New("no such this group")
+		return errors.New("group not exists")
 	}
 	delete(c.sections, group)
 	return nil
 }
 
 // 添加分组中的主机
-func (c *configFile) AddHost(group string, hostMap *node) error {
+func (c *hostFile) AddHost(group string, hostMap *node) error {
 	if len(group) == 0 {
 		group = DEFAULT_GROUP
 	}
@@ -238,18 +262,18 @@ func (c *configFile) AddHost(group string, hostMap *node) error {
 	}
 
 	if _, ok := c.sections[group]; !ok {
-		return errors.New("no such this group")
+		return errors.New("group not exists")
 	}
 
 	if _, ok := c.sections[group].Nodes[hostMap.Host]; ok {
-		return errors.New("no such this host")
+		return errors.New("host exists")
 	}
 	c.sections[group].Nodes[hostMap.Host] = hostMap
 	return nil
 }
 
 // 删除分组中的主机
-func (c *configFile) DeleteHost(group, host string) error {
+func (c *hostFile) DeleteHost(group, host string) error {
 	if len(group) == 0 {
 		group = DEFAULT_GROUP
 	}
@@ -259,28 +283,31 @@ func (c *configFile) DeleteHost(group, host string) error {
 		defer c.lock.Unlock()
 	}
 	if _, ok := c.sections[group]; !ok {
-		return errors.New("no such this group")
+		return errors.New("group not exists")
 	}
 
-	if _, ok := c.sections[group].Nodes[host]; ok {
-		return errors.New("not such this host")
+	if _, ok := c.sections[group].Nodes[host]; !ok {
+		return errors.New("host not exists")
 	}
 	delete(c.sections[group].Nodes, host)
 	return nil
 }
 
 // 获取所有主机
-func (c *configFile) GetHostList() []string {
-	list := make([]string, 0)
+func (c *hostFile) GetHostList() map[string]*node {
+	hostMap := make(map[string]*node, 0)
 	for _, group := range c.sections {
-		for host, _ := range group.Nodes {
-			list = append(list, host)
+		for host, value := range group.Nodes {
+			if _, ok := hostMap[host]; !ok {
+				hostMap[host] = value
+			}
 		}
 	}
-	return list
+	return hostMap
 }
 
-func (c *configFile) GetHost(host string) *node {
+// 获取指定主机的配置信息
+func (c *hostFile) GetHost(host string) *node {
 	if len(host) == 0 {
 		return nil
 	}
@@ -298,4 +325,9 @@ func (c *configFile) GetHost(host string) *node {
 		}
 	}
 	return nil
+}
+
+// 是否存在主机
+func (c *hostFile) ExistHost(host string) bool {
+	return c.GetHost(host) != nil
 }
