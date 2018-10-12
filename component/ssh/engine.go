@@ -22,6 +22,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 )
 
 var wg sync.WaitGroup
@@ -147,5 +148,75 @@ func (e *Engine) parseCmd(module, params string) error {
 }
 
 func (e *Engine) exec(cmd string) error {
+	return nil
+}
+
+func (e *Engine) Run(cmd string) error {
+	now := time.Now()
+
+	for k, v := range e.Clis {
+		msg := &Message{Host: k}
+
+		if !e.HostFile.ExistHost(k) {
+			msg.Status = Warning
+			msg.Msg = errors.New("Could not match supplied host pattern ")
+			msg.Chanage = false
+			msg.Duration = time.Now().Sub(now)
+			//fmt.Println(msg)
+			e.Messages.AddMsg(msg)
+			continue
+		}
+		host := e.HostFile.GetHost(k)
+		v = NewClient(host.Host, host.User, host.Port, time.Second*3)
+		wg.Add(1)
+
+		go func(cli *Client) {
+			defer wg.Done()
+			if host.Passwd != "" {
+				cli.AddPassword(host.Passwd)
+			}
+			if host.Privatekey != "" {
+				err := cli.AddPrivateKey(host.Privatekey, host.Passparse)
+				if err != nil {
+					msg.Status = Failed
+					msg.Msg = err.Error()
+					msg.Chanage = false
+					msg.Duration = time.Now().Sub(now)
+					//fmt.Println(msg)
+					e.Messages.AddMsg(msg)
+					return
+				}
+			}
+			err := cli.Conn()
+			if err != nil {
+				msg.Status = Failed
+				msg.Msg = err.Error()
+				msg.Chanage = false
+				msg.Duration = time.Now().Sub(now)
+				//fmt.Println(msg)
+				e.Messages.AddMsg(msg)
+				return
+			}
+			defer cli.Close()
+			buf, err := cli.Exec(cmd)
+			if err != nil {
+				msg.Status = Failed
+				msg.Msg = err.Error()
+				msg.Chanage = false
+				msg.Duration = time.Now().Sub(now)
+				//fmt.Println(msg)
+				e.Messages.AddMsg(msg)
+				return
+			}
+			msg.Status = Success
+			msg.Msg = string(buf)
+			msg.Chanage = false
+			msg.Duration = time.Now().Sub(now)
+			e.Messages.AddMsg(msg)
+			//fmt.Println(msg)
+		}(v)
+	}
+	wg.Wait()
+	e.Messages.Duration = time.Now().Sub(now)
 	return nil
 }

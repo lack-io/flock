@@ -8,6 +8,7 @@ import (
 func main() {
 	engine := ssh.NewEngine()
 	engine.LoadHostFile("./config/ssh.conf")
-	engine.LoadClient(".*3.2**")
-	fmt.Println(engine.Clis)
+	engine.LoadClient("192.168.3.111, 192")
+	engine.Run("w")
+	fmt.Println(engine.Messages)
 }
