@@ -1,17 +1,3 @@
-// Copyright 2018 xingyys, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 // flock ssh 组件的主体，整合各个部分，提供服务
 
 package ssh
@@ -20,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -28,7 +15,7 @@ import (
 var wg sync.WaitGroup
 
 func init() {
-
+	runtime.GOMAXPROCS(runtime.NumCPU())
 }
 
 type Engine struct {
@@ -162,7 +149,7 @@ func (e *Engine) Run(cmd string) error {
 			msg.Msg = errors.New("Could not match supplied host pattern ")
 			msg.Chanage = false
 			msg.Duration = time.Now().Sub(now)
-			//fmt.Println(msg)
+			fmt.Println(msg)
 			e.Messages.AddMsg(msg)
 			continue
 		}
@@ -182,7 +169,7 @@ func (e *Engine) Run(cmd string) error {
 					msg.Msg = err.Error()
 					msg.Chanage = false
 					msg.Duration = time.Now().Sub(now)
-					//fmt.Println(msg)
+					fmt.Println(msg)
 					e.Messages.AddMsg(msg)
 					return
 				}
@@ -193,7 +180,7 @@ func (e *Engine) Run(cmd string) error {
 				msg.Msg = err.Error()
 				msg.Chanage = false
 				msg.Duration = time.Now().Sub(now)
-				//fmt.Println(msg)
+				fmt.Println(msg)
 				e.Messages.AddMsg(msg)
 				return
 			}
@@ -204,7 +191,7 @@ func (e *Engine) Run(cmd string) error {
 				msg.Msg = err.Error()
 				msg.Chanage = false
 				msg.Duration = time.Now().Sub(now)
-				//fmt.Println(msg)
+				fmt.Println(msg)
 				e.Messages.AddMsg(msg)
 				return
 			}
@@ -212,8 +199,8 @@ func (e *Engine) Run(cmd string) error {
 			msg.Msg = string(buf)
 			msg.Chanage = false
 			msg.Duration = time.Now().Sub(now)
+			fmt.Println(msg)
 			e.Messages.AddMsg(msg)
-			//fmt.Println(msg)
 		}(v)
 	}
 	wg.Wait()
